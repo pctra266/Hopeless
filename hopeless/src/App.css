@@ -1,0 +1,446 @@
+/* --- Global Styles --- */
+:root {
+  --primary-bg: #f4f7f6;
+  --card-bg: #ffffff;
+  --text-color: #333;
+  --primary-color: #007bff;
+  --earn-color: #28a745;
+  --spend-color: #dc3545;
+  --border-color: #e0e0e0;
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+body {
+  background-color: var(--primary-bg);
+  color: var(--text-color);
+  line-height: 1.6;
+}
+
+.App {
+  max-width: 1400px;
+  margin: 2rem auto;
+  padding: 1rem 2rem; /* Thêm padding ngang cho rộng rãi hơn */
+}
+
+.card {
+  background-color: var(--card-bg);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+/* --- Header & Balance & Nav (Cập nhật) --- */
+.header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+  color: var(--primary-color);
+}
+
+.balance-card {
+  background: linear-gradient(135deg, var(--primary-color), #0056b3);
+  color: white;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgba(0, 86, 179, 0.3);
+}
+
+.balance-card h2 {
+  font-size: 1.2rem;
+  font-weight: 400;
+  opacity: 0.9;
+  margin-bottom: 0.5rem;
+}
+
+.balance-amount {
+  font-size: 3.5rem;
+  font-weight: 700;
+  margin-right: 0.5rem;
+  line-height: 1;
+}
+
+/* (MỚI) Thẻ số dư nhỏ cho các trang khác */
+.balance-card-small {
+  padding: 1rem 1.5rem;
+  font-size: 1.1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--card-bg);
+}
+.balance-amount-small {
+  font-weight: 700;
+  color: var(--primary-color);
+  font-size: 1.2rem;
+}
+
+
+/* (MỚI) Thanh điều hướng */
+.navigation {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap; /* Cho mobile */
+}
+
+.nav-btn {
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 8px;
+  background-color: var(--card-bg);
+  color: var(--primary-color);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.nav-btn:hover {
+  background-color: #f0f0f0;
+}
+
+.nav-btn.active {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+/* --- Main Content Layout (2 cột) --- */
+.main-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+/* --- Form --- */
+.form-container h3,
+.history-container h3 {
+  font-size: 1.25rem;
+  margin-bottom: 1rem;
+  border-bottom: 2px solid var(--border-color);
+  padding-bottom: 0.5rem;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+.form-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.btn {
+  padding: 0.8rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.btn:hover {
+  opacity: 0.85;
+}
+
+.btn-earn {
+  background-color: var(--earn-color);
+}
+
+.btn-spend {
+  background-color: var(--spend-color);
+}
+.btn-primary { 
+  background-color: var(--primary-color); 
+}
+
+/* --- History List --- */
+.transaction-list {
+  list-style-type: none;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.tx-item {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.tx-item:last-child {
+  border-bottom: none;
+}
+
+.tx-desc {
+  font-weight: 500;
+}
+
+.tx-date {
+  font-size: 0.9rem;
+  color: #666;
+  text-align: right;
+  padding-right: 1rem;
+}
+
+.tx-amount {
+  font-weight: 700;
+  font-size: 1.1rem;
+  text-align: right;
+}
+
+.tx-amount.earn {
+  color: var(--earn-color);
+}
+
+.tx-amount.spend {
+  color: var(--spend-color);
+}
+
+/* --- (MỚI) Reward Page --- */
+.reward-page {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr; /* 2 cột: form bên trái, bảng bên phải */
+  gap: 1.5rem;
+}
+
+.reward-form-container h3,
+.reward-list-container h3 {
+  font-size: 1.25rem;
+  margin-bottom: 1rem;
+  border-bottom: 2px solid var(--border-color);
+  padding-bottom: 0.5rem;
+}
+
+.btn-quick-add {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+}
+.btn-quick-add.earn { background-color: var(--earn-color); }
+.btn-quick-add.spend { background-color: var(--spend-color); }
+
+.btn-delete {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  background-color: var(--spend-color);
+  cursor: pointer;
+}
+
+/* --- (MỚI) Settings Page --- */
+.settings-page {
+  max-width: 800px;
+  margin: 0 auto;
+}
+.setting-item {
+  padding: 1.5rem 0;
+  border-bottom: 1px solid var(--border-color);
+}
+.setting-item:last-child { border-bottom: none; }
+
+.setting-item h4 {
+  font-size: 1.2rem;
+  margin-bottom: 0.5rem;
+}
+.setting-item p {
+  margin-bottom: 1rem;
+  color: #555;
+  font-size: 0.95rem;
+}
+
+
+/* --- (MỚI) CSS cho Bảng, Sắp xếp, Tìm kiếm --- */
+.table-controls {
+  margin-bottom: 1rem;
+}
+.search-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 1rem;
+}
+.table-responsive {
+  width: 100%;
+  overflow-x: auto; /* Cho phép cuộn ngang trên màn hình nhỏ */
+}
+.reward-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.reward-table th, .reward-table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+.reward-table th {
+  font-size: 0.9rem;
+  color: #555;
+  background-color: #f9f9f9;
+}
+.sortable-header {
+  cursor: pointer;
+  user-select: none;
+}
+.sortable-header:hover {
+  background-color: #f0f0f0;
+}
+
+/* Căn chỉnh cột */
+.col-stt { width: 5%; }
+.col-desc { width: 45%; }
+.col-amount { width: 20%; }
+.col-action { width: 30%; text-align: center; }
+
+.reward-table .item-amount {
+  font-weight: 600;
+}
+.reward-table .item-amount.earn { color: var(--earn-color); }
+.reward-table .item-amount.spend { color: var(--spend-color); }
+
+.reward-table .item-desc {
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.reward-table .item-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  flex-wrap: wrap; /* Cho phép nút xuống hàng nếu không đủ */
+}
+
+/* --- (MỚI) CSS cho form Sửa trong bảng --- */
+.item-edit-form {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.5rem 0;
+  flex-wrap: wrap;
+}
+.item-edit-input {
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 1rem;
+  flex-grow: 1; /* Input mô tả chiếm nhiều không gian */
+}
+.item-edit-input.amount-input {
+  flex-grow: 0;
+  width: 100px; /* Cố định chiều rộng cho input số */
+}
+.item-edit-form .item-actions {
+  flex-shrink: 0;
+}
+
+/* --- (MỚI) CSS cho các nút Sửa, Lưu, Hủy --- */
+.btn-edit, .btn-save, .btn-cancel {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.btn-edit:hover, .btn-save:hover, .btn-cancel:hover {
+  opacity: 0.85;
+}
+
+.btn-edit { background-color: var(--primary-color); }
+.btn-save { background-color: var(--earn-color); }
+.btn-cancel { background-color: #6c757d; }
+
+.reward-item-row .item-actions {
+  flex-shrink: 0; /* Ngăn các nút bị co lại */
+}
+
+
+/* --- Responsive (cho thiết bị nhỏ) --- */
+@media (max-width: 768px) {
+  .App {
+    padding: 1rem; /* Giảm padding trên mobile */
+  }
+
+  .main-content, .reward-page {
+    grid-template-columns: 1fr;
+  }
+  
+  .history-container {
+    /* Đảo thứ tự trên mobile */
+    order: -1;
+  }
+  
+  .balance-amount {
+    font-size: 2.5rem;
+  }
+  
+  .header h1 {
+    font-size: 1.5rem;
+  }
+
+  /* (MỚI) Responsive cho bảng */
+  .reward-table .item-actions {
+    justify-content: flex-start; /* Căn trái các nút trên mobile */
+  }
+
+  .col-action {
+    text-align: left;
+  }
+
+  /* (MỚI) Responsive cho form sửa */
+  .item-edit-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .item-edit-input.amount-input {
+    width: 100%; /* Input số chiếm 100% trên mobile */
+  }
+  .item-edit-form .item-actions {
+    justify-content: flex-start;
+  }
+}
+
