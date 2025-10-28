@@ -5,7 +5,7 @@ import { supabase } from './supabaseClient'
 // --- 1. Định nghĩa cấu trúc dữ liệu ---
 interface Transaction {
   id: string;
-  date: number;
+  date: string;
   description: string;
   amount: number; // (+) cho 'earn', (-) cho 'spend'
   type: 'earn' | 'spend';
@@ -100,7 +100,7 @@ const addTransaction = async (desc: string, amt: number, type: 'earn' | 'spend')
 
   const newTransaction: Transaction = {
     id: new Date().toISOString() + Math.random(), 
-    date: Date.now(),
+    date: new Date().toISOString(),
     description: desc,
     amount: finalAmount,
     type: type,
