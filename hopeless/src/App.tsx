@@ -1,5 +1,6 @@
 import { useState, useEffect, FormEvent, ChangeEvent } from 'react';
 import './App.css'; // Import tệp CSS
+import { supabase } from './supabaseClient'
 
 // --- 1. Định nghĩa cấu trúc dữ liệu ---
 interface Transaction {
@@ -53,52 +54,50 @@ function App() {
   const [editItemDescription, setEditItemDescription] = useState('');
   const [editItemAmount, setEditItemAmount] = useState<number | string>('');
 
-  // (MỚI) State cho tìm kiếm và sắp xếp
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: 'description' | 'amount', direction: 'ascending' | 'descending' } | null>(null);
 
 
-  // --- 3. Logic Local Storage (Cập nhật) ---
   const API_URL = 'http://localhost:3001';
 
-  // Tải dữ liệu khi khởi động TỪ JSON-SERVER
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Dùng Promise.all để gọi tất cả API cùng lúc
-        const [
-          profileRes, 
-          transactionsRes, 
-          earnItemsRes, 
-          spendItemsRes
-        ] = await Promise.all([
-          fetch(`${API_URL}/profile`),
-          fetch(`${API_URL}/transactions?_sort=date&_order=desc`), // Sắp xếp luôn
-          fetch(`${API_URL}/earnItems`),
-          fetch(`${API_URL}/spendItems`),
-        ]);
-
-        // Chuyển đổi kết quả sang JSON
-        const profileData = await profileRes.json();
-        const transactionsData = await transactionsRes.json();
-        const earnItemsData = await earnItemsRes.json();
-        const spendItemsData = await spendItemsRes.json();
-
+        let { data: profile, error: profileError } = await supabase
+          .from('profile')
+          .select('balance')
+          .single(); 
+  
+        if (profileError) throw profileError;
+  
+        let { data: transactions, error: txError } = await supabase
+          .from('transactions')
+          .select('*')
+          .order('date', { ascending: false });
+  
+        let { data: earnItems, error: earnError } = await supabase
+          .from('earnItems')
+          .select('*');
+  
+        let { data: spendItems, error: spendError } = await supabase
+          .from('spendItems')
+          .select('*');
+  
+        if (txError || earnError || spendError) throw txError || earnError || spendError;
+  
         // Cập nhật state
-        // Lưu ý: profile là 1 object, không phải mảng
-        setBalance(profileData.balance || 0); 
-        setTransactions(transactionsData || []);
-        setEarnItems(earnItemsData || []);
-        setSpendItems(spendItemsData || []);
-
+        setBalance(profile?.balance || 0);
+        setTransactions(transactions || []);
+        setEarnItems(earnItems || []);
+        setSpendItems(spendItems || []);
+  
       } catch (e) {
-        console.error("Lỗi khi tải dữ liệu từ server:", e);
-        alert("Không thể kết nối đến server. Hãy đảm bảo json-server đang chạy!");
+        console.error("Lỗi khi tải dữ liệu từ Supabase:", e);
+        alert("Không thể kết nối đến cơ sở dữ liệu.");
       }
     };
-
     fetchData();
-  }, []); // Chỉ chạy 1 lần khi khởi động
+  }, []);
 // Hàm thêm giao dịch (CẬP NHẬT)
 const addTransaction = async (desc: string, amt: number, type: 'earn' | 'spend') => {
   const finalAmount = type === 'earn' ? Math.abs(amt) : -Math.abs(amt);
@@ -185,37 +184,33 @@ const addTransaction = async (desc: string, amt: number, type: 'earn' | 'spend')
       return;
     }
 
-    const newItem: RewardItem = {
+    const newItem = {
+      // id: new Date()... (Supabase có thể tự tạo ID, nhưng dùng cách cũ vẫn ổn)
       id: new Date().toISOString() + Math.random(),
       description: itemDescription,
       amount: numAmount,
     };
-
-    const endpoint = type === 'earn' ? 'earnItems' : 'spendItems';
-
+  
+    const tableName = type === 'earn' ? 'earnItems' : 'spendItems';
+  
     try {
-      const res = await fetch(`${API_URL}/${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newItem),
-      });
-
-      if (!res.ok) throw new Error('Lỗi khi thêm mục');
-
-      const savedItem = await res.json(); // Lấy item đã lưu (có id từ server)
-
+      const { data, error } = await supabase
+        .from(tableName)
+        .insert(newItem)
+        .select(); // .select() để nó trả về item vừa tạo
+  
+      if (error) throw error;
+  
       // Cập nhật state
       if (type === 'earn') {
-        setEarnItems([...earnItems, savedItem]);
+        setEarnItems([...earnItems, data[0]]);
       } else {
-        setSpendItems([...spendItems, savedItem]);
+        setSpendItems([...spendItems, data[0]]);
       }
-
-      setItemDescription('');
-      setItemAmount('');
-
+  
+      // ... (xóa form)
     } catch (e) {
-      console.error(e);
+      console.error("Lỗi khi thêm mục:", e);
       alert("Đã xảy ra lỗi khi lưu mục mới.");
     }
   };
@@ -225,14 +220,15 @@ const addTransaction = async (desc: string, amt: number, type: 'earn' | 'spend')
   const handleDeleteItem = async (id: string, type: 'earn' | 'spend') => {
     if (!window.confirm("Bạn có chắc muốn xóa mục này?")) return;
 
-    const endpoint = type === 'earn' ? 'earnItems' : 'spendItems';
+    const tableName = type === 'earn' ? 'earnItems' : 'spendItems';
 
     try {
-      const res = await fetch(`${API_URL}/${endpoint}/${id}`, {
-        method: 'DELETE',
-      });
+      const { error } = await supabase
+      .from(tableName)
+      .delete()
+      .eq('id', id); // eq = equals (bằng)
 
-      if (!res.ok) throw new Error('Lỗi khi xóa mục');
+      if (error) throw error;
 
       // Cập nhật state
       if (type === 'earn') {
