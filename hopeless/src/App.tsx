@@ -18,16 +18,8 @@ interface RewardItem {
   amount: number; // Luôn là số dương
 }
 
-// (MỚI) Dữ liệu để backup
-interface BackupData {
-  balance: number;
-  transactions: Transaction[];
-  earnItems: RewardItem[];
-  spendItems: RewardItem[];
-}
-
 // (MỚI) Định nghĩa các màn hình
-type View = 'main' | 'earn' | 'spend' | 'settings';
+type View = 'main' | 'earn' | 'spend' ;
 
 
 function App() {
@@ -56,9 +48,6 @@ function App() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: 'description' | 'amount', direction: 'ascending' | 'descending' } | null>(null);
-
-
-  const API_URL = 'http://localhost:3001';
 
   useEffect(() => {
     const fetchData = async () => {
@@ -98,7 +87,7 @@ function App() {
     };
     fetchData();
   }, []);
-// Hàm thêm giao dịch (CẬP NHẬT)
+// Hàm thêm giao dịch (CẬP NHẬT CHO SUPABASE)
 const addTransaction = async (desc: string, amt: number, type: 'earn' | 'spend') => {
   const finalAmount = type === 'earn' ? Math.abs(amt) : -Math.abs(amt);
 
@@ -107,9 +96,9 @@ const addTransaction = async (desc: string, amt: number, type: 'earn' | 'spend')
     return false; // Báo hiệu thất bại
   }
 
+  const newBalance = balance + finalAmount;
+
   const newTransaction: Transaction = {
-    // json-server sẽ tự tạo 'id' nếu chúng ta không gửi, 
-    // nhưng gửi 'id' từ client cũng OK.
     id: new Date().toISOString() + Math.random(), 
     date: Date.now(),
     description: desc,
@@ -117,27 +106,23 @@ const addTransaction = async (desc: string, amt: number, type: 'earn' | 'spend')
     type: type,
   };
   
-  const newBalance = balance + finalAmount;
-
   try {
-    // 1. Gửi giao dịch mới lên server
-    const txRes = await fetch(`${API_URL}/transactions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newTransaction),
-    });
+    // 1. Gửi giao dịch mới lên Supabase
+    const { error: txError } = await supabase
+      .from('transactions')
+      .insert(newTransaction);
 
-    if (!txRes.ok) throw new Error('Lỗi khi thêm giao dịch');
+    if (txError) throw txError; // Nếu lỗi thì dừng lại
 
-    // 2. Cập nhật số dư mới lên server
-    // Chú ý: chúng ta dùng PUT và ID '1' (đã định nghĩa trong db.json)
-    const profileRes = await fetch(`${API_URL}/profile`, {
-      method: 'PUT', // Dùng PUT để ghi đè toàn bộ object
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: 1, balance: newBalance }), // Ghi đè balance
-    });
+    // 2. Cập nhật số dư mới lên Supabase
+    // RẤT QUAN TRỌNG: Giả sử dòng 'profile' của bạn có một cột 'id' với giá trị là 1.
+    // Hãy kiểm tra lại Bảng 'profile' trên Supabase của bạn!
+    const { error: profileError } = await supabase
+      .from('profile')
+      .update({ balance: newBalance })
+      .eq('id', 1); // Bạn cần một cột để lọc (ví dụ: id = 1)
 
-    if (!profileRes.ok) throw new Error('Lỗi khi cập nhật số dư');
+    if (profileError) throw profileError; // Nếu lỗi thì dừng lại
 
     // 3. Cập nhật state ở local (nếu cả 2 API đều thành công)
     setTransactions([newTransaction, ...transactions]);
@@ -259,6 +244,7 @@ const addTransaction = async (desc: string, amt: number, type: 'earn' | 'spend')
 
   // (MỚI) Cập nhật một mục
   // Cập nhật một mục (CẬP NHẬT)
+  // Cập nhật một mục (CẬP NHẬT CHO SUPABASE)
   const handleUpdateItem = async (type: 'earn' | 'spend') => {
     if (!editingItemId) return;
 
@@ -268,28 +254,30 @@ const addTransaction = async (desc: string, amt: number, type: 'earn' | 'spend')
       return;
     }
 
-    const updatedItem = {
-      id: editingItemId,
+    // Chỉ gửi các trường cần cập nhật
+    const updates = {
       description: editItemDescription,
       amount: numAmount,
     };
 
-    const endpoint = type === 'earn' ? 'earnItems' : 'spendItems';
+    const tableName = type === 'earn' ? 'earnItems' : 'spendItems';
 
     try {
-      const res = await fetch(`${API_URL}/${endpoint}/${editingItemId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedItem),
-      });
+      const { data, error } = await supabase
+        .from(tableName)
+        .update(updates)
+        .eq('id', editingItemId)
+        .select(); // Yêu cầu Supabase trả về dòng vừa được cập nhật
 
-      if (!res.ok) throw new Error('Lỗi khi cập nhật');
+      if (error) throw error;
+
+      const updatedItemFromDB = data[0]; // Lấy item đã được cập nhật từ DB
 
       // Cập nhật state
       if (type === 'earn') {
-        setEarnItems(earnItems.map(item => item.id === editingItemId ? updatedItem : item));
+        setEarnItems(earnItems.map(item => item.id === editingItemId ? updatedItemFromDB : item));
       } else {
-        setSpendItems(spendItems.map(item => item.id === editingItemId ? updatedItem : item));
+        setSpendItems(spendItems.map(item => item.id === editingItemId ? updatedItemFromDB : item));
       }
 
       handleCancelEdit(); // Reset form
@@ -311,65 +299,6 @@ const addTransaction = async (desc: string, amt: number, type: 'earn' | 'spend')
       await addTransaction(item.description, item.amount, type);
     }
   }
-
-  // --- 5. Logic Import / Export JSON (MỚI) ---
-
-  const handleExportData = () => {
-    const data: BackupData = {
-      balance,
-      transactions,
-      earnItems,
-      spendItems,
-    };
-    const jsonString = JSON.stringify(data, null, 2); // Định dạng JSON cho đẹp
-    const blob = new Blob([jsonString], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `hopeless-coin-backup-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImportData = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (!window.confirm("Bạn có chắc muốn nhập dữ liệu mới? TOÀN BỘ dữ liệu hiện tại sẽ bị ghi đè!")) {
-      event.target.value = ''; // Reset input
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const text = e.target?.result as string;
-        const data: BackupData = JSON.parse(text);
-
-        // Xác thực dữ liệu cơ bản
-        if (typeof data.balance === 'number' && Array.isArray(data.transactions) && Array.isArray(data.earnItems) && Array.isArray(data.spendItems)) {
-          setBalance(data.balance);
-          setTransactions(data.transactions);
-          setEarnItems(data.earnItems);
-          setSpendItems(data.spendItems);
-          alert("Nhập dữ liệu thành công!");
-          setView('main'); // Quay về trang chủ
-        } else {
-          throw new Error("File JSON không đúng định dạng.");
-        }
-      } catch (err) {
-        console.error("Lỗi khi nhập file:", err);
-        alert("Nhập thất bại. File có thể bị lỗi hoặc không đúng định dạng.");
-      } finally {
-        event.target.value = ''; // Reset input
-      }
-    };
-    reader.readAsText(file);
-  };
-
   // --- 6. Giao diện (JSX) (Cập nhật) ---
 
   // (MỚI) Render nội dung chính dựa trên 'view'
@@ -381,8 +310,6 @@ const addTransaction = async (desc: string, amt: number, type: 'earn' | 'spend')
         return renderRewardPage('earn');
       case 'spend':
         return renderRewardPage('spend');
-      case 'settings':
-        return renderSettingsPage();
       default:
         return renderMainPage();
     }
@@ -670,32 +597,6 @@ const addTransaction = async (desc: string, amt: number, type: 'earn' | 'spend')
     );
   };
   
-  // (MỚI) Trang Cài đặt (Import/Export)
-  const renderSettingsPage = () => (
-    <div className="settings-page card">
-      <h3>Cài đặt & Sao lưu Dữ liệu</h3>
-      
-      <div className="setting-item">
-        <h4>Xuất Dữ Liệu (Export)</h4>
-        <p>Lưu toàn bộ dữ liệu (số dư, lịch sử, bảng giá) ra file JSON để sao lưu.</p>
-        <button className="btn btn-primary" onClick={handleExportData}>
-          Tải file Backup (.json)
-        </button>
-      </div>
-
-      <div className="setting-item">
-        <h4>Nhập Dữ Liệu (Import)</h4>
-        <p>Khôi phục dữ liệu từ file JSON. <strong style={{color: 'var(--spend-color)'}}>Cảnh báo: Toàn bộ dữ liệu hiện tại sẽ bị ghi đè!</strong></p>
-        <input 
-          type="file" 
-          accept="application/json" 
-          onChange={handleImportData} 
-        />
-      </div>
-    </div>
-  );
-
-
   return (
     <div className="App">
       <header className="header">
@@ -720,12 +621,6 @@ const addTransaction = async (desc: string, amt: number, type: 'earn' | 'spend')
             onClick={() => setView('spend')}
           >
             Bảng Tiêu Coin
-          </button>
-          <button 
-            className={`nav-btn ${view === 'settings' ? 'active' : ''}`} 
-            onClick={() => setView('settings')}
-          >
-            Cài đặt
           </button>
         </nav>
       </header>
