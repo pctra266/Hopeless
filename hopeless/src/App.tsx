@@ -59,62 +59,106 @@ function App() {
 
 
   // --- 3. Logic Local Storage (Cập nhật) ---
+  const API_URL = 'http://localhost:3001';
 
-  // Tải dữ liệu khi khởi động
+  // Tải dữ liệu khi khởi động TỪ JSON-SERVER
   useEffect(() => {
-    const storedData = localStorage.getItem('hopelessCoin_data_v2');
-    if (storedData) {
+    const fetchData = async () => {
       try {
-        const data: BackupData = JSON.parse(storedData);
-        setBalance(data.balance || 0);
-        setTransactions(data.transactions || []);
-        setEarnItems(data.earnItems || []);
-        setSpendItems(data.spendItems || []);
-      } catch (e) {
-        console.error("Lỗi khi đọc LocalStorage:", e);
-      }
-    }
-  }, []);
+        // Dùng Promise.all để gọi tất cả API cùng lúc
+        const [
+          profileRes, 
+          transactionsRes, 
+          earnItemsRes, 
+          spendItemsRes
+        ] = await Promise.all([
+          fetch(`${API_URL}/profile`),
+          fetch(`${API_URL}/transactions?_sort=date&_order=desc`), // Sắp xếp luôn
+          fetch(`${API_URL}/earnItems`),
+          fetch(`${API_URL}/spendItems`),
+        ]);
 
-  // Lưu dữ liệu mỗi khi có thay đổi
-  useEffect(() => {
-    const data: BackupData = {
-      balance,
-      transactions,
-      earnItems,
-      spendItems,
+        // Chuyển đổi kết quả sang JSON
+        const profileData = await profileRes.json();
+        const transactionsData = await transactionsRes.json();
+        const earnItemsData = await earnItemsRes.json();
+        const spendItemsData = await spendItemsRes.json();
+
+        // Cập nhật state
+        // Lưu ý: profile là 1 object, không phải mảng
+        setBalance(profileData.balance || 0); 
+        setTransactions(transactionsData || []);
+        setEarnItems(earnItemsData || []);
+        setSpendItems(spendItemsData || []);
+
+      } catch (e) {
+        console.error("Lỗi khi tải dữ liệu từ server:", e);
+        alert("Không thể kết nối đến server. Hãy đảm bảo json-server đang chạy!");
+      }
     };
-    localStorage.setItem('hopelessCoin_data_v2', JSON.stringify(data));
-  }, [balance, transactions, earnItems, spendItems]);
+
+    fetchData();
+  }, []); // Chỉ chạy 1 lần khi khởi động
+// Hàm thêm giao dịch (CẬP NHẬT)
+const addTransaction = async (desc: string, amt: number, type: 'earn' | 'spend') => {
+  const finalAmount = type === 'earn' ? Math.abs(amt) : -Math.abs(amt);
+
+  if (type === 'spend' && balance + finalAmount < 0) {
+    alert("Không đủ Hopeless Coin để thực hiện giao dịch này!");
+    return false; // Báo hiệu thất bại
+  }
+
+  const newTransaction: Transaction = {
+    // json-server sẽ tự tạo 'id' nếu chúng ta không gửi, 
+    // nhưng gửi 'id' từ client cũng OK.
+    id: new Date().toISOString() + Math.random(), 
+    date: Date.now(),
+    description: desc,
+    amount: finalAmount,
+    type: type,
+  };
+  
+  const newBalance = balance + finalAmount;
+
+  try {
+    // 1. Gửi giao dịch mới lên server
+    const txRes = await fetch(`${API_URL}/transactions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newTransaction),
+    });
+
+    if (!txRes.ok) throw new Error('Lỗi khi thêm giao dịch');
+
+    // 2. Cập nhật số dư mới lên server
+    // Chú ý: chúng ta dùng PUT và ID '1' (đã định nghĩa trong db.json)
+    const profileRes = await fetch(`${API_URL}/profile`, {
+      method: 'PUT', // Dùng PUT để ghi đè toàn bộ object
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: 1, balance: newBalance }), // Ghi đè balance
+    });
+
+    if (!profileRes.ok) throw new Error('Lỗi khi cập nhật số dư');
+
+    // 3. Cập nhật state ở local (nếu cả 2 API đều thành công)
+    setTransactions([newTransaction, ...transactions]);
+    setBalance(newBalance);
+    return true; // Báo hiệu thành công
+
+  } catch (e) {
+    console.error(e);
+    alert("Đã xảy ra lỗi khi lưu giao dịch!");
+    return false;
+  }
+};
 
 
   // --- 4. Logic xử lý nghiệp vụ (Cập nhật) ---
 
-  // Hàm thêm giao dịch (dùng chung)
-  const addTransaction = (desc: string, amt: number, type: 'earn' | 'spend') => {
-    const finalAmount = type === 'earn' ? Math.abs(amt) : -Math.abs(amt);
-
-    // Kiểm tra nếu chi tiêu
-    if (type === 'spend' && balance + finalAmount < 0) {
-      alert("Không đủ Hopeless Coin để thực hiện giao dịch này!");
-      return false; // Báo hiệu thất bại
-    }
-
-    const newTransaction: Transaction = {
-      id: new Date().toISOString() + Math.random(),
-      date: Date.now(),
-      description: desc,
-      amount: finalAmount,
-      type: type,
-    };
-
-    setTransactions([newTransaction, ...transactions]);
-    setBalance(balance + finalAmount);
-    return true; // Báo hiệu thành công
-  };
 
   // Xử lý form giao dịch chính
-  const handleSubmitTransaction = (e: FormEvent, type: 'earn' | 'spend') => {
+  // SỬA LẠI
+  const handleSubmitTransaction = async (e: FormEvent, type: 'earn' | 'spend') => {
     e.preventDefault();
     const numAmount = Number(txAmount);
     if (!txDescription || !numAmount || numAmount <= 0) {
@@ -122,18 +166,22 @@ function App() {
       return;
     }
     
-    if (addTransaction(txDescription, numAmount, type)) {
+    // Thêm 'await' để đợi kết quả (true/false) từ API
+    const isSuccess = await addTransaction(txDescription, numAmount, type);
+
+    if (isSuccess) {
       setTxDescription('');
       setTxAmount('');
     }
   };
 
   // (MỚI) Thêm một mục vào "Bảng giá"
-  const handleAddItem = (e: FormEvent, type: 'earn' | 'spend') => {
+  // Thêm một mục vào "Bảng giá" (CẬP NHẬT)
+  const handleAddItem = async (e: FormEvent, type: 'earn' | 'spend') => {
     e.preventDefault();
     const numAmount = Number(itemAmount);
     if (!itemDescription || !numAmount || numAmount <= 0) {
-      alert("Vui lòng nhập mô tả và số lượng coin hợp lệ (luôn là số dương).");
+      alert("Vui lòng nhập mô tả và số lượng coin hợp lệ.");
       return;
     }
 
@@ -143,24 +191,59 @@ function App() {
       amount: numAmount,
     };
 
-    if (type === 'earn') {
-      setEarnItems([...earnItems, newItem]);
-    } else {
-      setSpendItems([...spendItems, newItem]);
-    }
+    const endpoint = type === 'earn' ? 'earnItems' : 'spendItems';
 
-    setItemDescription('');
-    setItemAmount('');
+    try {
+      const res = await fetch(`${API_URL}/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newItem),
+      });
+
+      if (!res.ok) throw new Error('Lỗi khi thêm mục');
+
+      const savedItem = await res.json(); // Lấy item đã lưu (có id từ server)
+
+      // Cập nhật state
+      if (type === 'earn') {
+        setEarnItems([...earnItems, savedItem]);
+      } else {
+        setSpendItems([...spendItems, savedItem]);
+      }
+
+      setItemDescription('');
+      setItemAmount('');
+
+    } catch (e) {
+      console.error(e);
+      alert("Đã xảy ra lỗi khi lưu mục mới.");
+    }
   };
   
   // (MỚI) Xóa một mục khỏi "Bảng giá"
-  const handleDeleteItem = (id: string, type: 'earn' | 'spend') => {
+  // Xóa một mục khỏi "Bảng giá" (CẬP NHẬT)
+  const handleDeleteItem = async (id: string, type: 'earn' | 'spend') => {
     if (!window.confirm("Bạn có chắc muốn xóa mục này?")) return;
 
-    if (type === 'earn') {
-      setEarnItems(earnItems.filter(item => item.id !== id));
-    } else {
-      setSpendItems(spendItems.filter(item => item.id !== id));
+    const endpoint = type === 'earn' ? 'earnItems' : 'spendItems';
+
+    try {
+      const res = await fetch(`${API_URL}/${endpoint}/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) throw new Error('Lỗi khi xóa mục');
+
+      // Cập nhật state
+      if (type === 'earn') {
+        setEarnItems(earnItems.filter(item => item.id !== id));
+      } else {
+        setSpendItems(spendItems.filter(item => item.id !== id));
+      }
+
+    } catch (e) {
+      console.error(e);
+      alert("Đã xảy ra lỗi khi xóa.");
     }
   };
 
@@ -179,12 +262,13 @@ function App() {
   };
 
   // (MỚI) Cập nhật một mục
-  const handleUpdateItem = (type: 'earn' | 'spend') => {
+  // Cập nhật một mục (CẬP NHẬT)
+  const handleUpdateItem = async (type: 'earn' | 'spend') => {
     if (!editingItemId) return;
 
     const numAmount = Number(editItemAmount);
     if (!editItemDescription || !numAmount || numAmount <= 0) {
-      alert("Vui lòng nhập mô tả và số lượng coin hợp lệ (luôn là số dương).");
+      alert("Vui lòng nhập mô tả và số lượng coin hợp lệ.");
       return;
     }
 
@@ -194,21 +278,41 @@ function App() {
       amount: numAmount,
     };
 
-    if (type === 'earn') {
-      setEarnItems(earnItems.map(item => item.id === editingItemId ? updatedItem : item));
-    } else {
-      setSpendItems(spendItems.map(item => item.id === editingItemId ? updatedItem : item));
-    }
+    const endpoint = type === 'earn' ? 'earnItems' : 'spendItems';
 
-    handleCancelEdit(); // Reset form
+    try {
+      const res = await fetch(`${API_URL}/${endpoint}/${editingItemId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedItem),
+      });
+
+      if (!res.ok) throw new Error('Lỗi khi cập nhật');
+
+      // Cập nhật state
+      if (type === 'earn') {
+        setEarnItems(earnItems.map(item => item.id === editingItemId ? updatedItem : item));
+      } else {
+        setSpendItems(spendItems.map(item => item.id === editingItemId ? updatedItem : item));
+      }
+
+      handleCancelEdit(); // Reset form
+
+    } catch (e) {
+      console.error(e);
+      alert("Đã xảy ra lỗi khi cập nhật.");
+    }
   };
 
 
   // (MỚI) Thêm giao dịch nhanh từ bảng giá
-  const quickAdd = (item: RewardItem, type: 'earn' | 'spend') => {
+  // SỬA LẠI
+  const quickAdd = async (item: RewardItem, type: 'earn' | 'spend') => {
     const verb = type === 'earn' ? 'kiếm' : 'tiêu';
     if (window.confirm(`Xác nhận ${verb} ${item.amount} coin cho: "${item.description}"?`)) {
-      addTransaction(item.description, item.amount, type);
+      // Thêm 'await' để đảm bảo nó chạy xong
+      // Bạn có thể thêm try/catch ở đây nếu muốn
+      await addTransaction(item.description, item.amount, type);
     }
   }
 
